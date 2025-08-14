@@ -12,7 +12,6 @@ def get_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # --- Load spaCy Model Safely ---
-
 def load_spacy_model():
     try:
         return spacy.load("en_core_web_sm")
@@ -23,12 +22,11 @@ def load_spacy_model():
 
 nlp = load_spacy_model()
 
-
-# Load GPT-2 model and tokenizer
+# --- Load GPT-2 Model ---
 model_name = "gpt2"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")  # Streamlit Cloud is CPU-only
 model.to(device)
 
 # --- Page Config ---
@@ -88,7 +86,7 @@ button[kind="primary"]:hover {
 
 # --- Title Banner ---
 st.markdown("<h1 style='text-align: center;'>🧠 Resume Critique + JD Matcher + GPT-2 Generator</h1>", unsafe_allow_html=True)
-st.markdown("Upload your resume and job description to extract keywords, calculate match score, generate feedback, and create a tailored cover letter.")
+st.markdown("Upload your resume and job description to extract keywords, calculate match score, generate feedback, and generate text using GPT-2.")
 
 # --- Display Current Date & Time ---
 current_time = datetime.now().strftime("%A, %d %B %Y | %I:%M %p")
@@ -101,17 +99,18 @@ jd_file = st.sidebar.file_uploader("Job Description (PDF/DOCX)", type=["pdf", "d
 st.sidebar.markdown("---")
 prompt = st.sidebar.text_area("📝 GPT-2 Prompt")
 generate_btn = st.sidebar.button("🚀 Generate Text")
-tone = st.sidebar.selectbox("🎯 Cover Letter Tone", ["Formal", "Enthusiastic", "Confident", "Persuasive"])
-generate_cover_btn = st.sidebar.button("✉️ Generate Cover Letter")
 
 # --- Text Extraction ---
 def extract_text(file):
-    if file.name.endswith(".pdf"):
-        reader = PdfReader(file)
-        return "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-    elif file.name.endswith(".docx"):
-        doc = Document(file)
-        return "\n".join([para.text for para in doc.paragraphs])
+    try:
+        if file.name.endswith(".pdf"):
+            reader = PdfReader(file)
+            return "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+        elif file.name.endswith(".docx"):
+            doc = Document(file)
+            return "\n".join([para.text for para in doc.paragraphs])
+    except Exception as e:
+        st.error(f"❌ Error reading file: {e}")
     return ""
 
 # --- Keyword Extraction ---
@@ -196,45 +195,3 @@ if generate_btn and prompt:
     except ValueError as e:
         st.error(f"⚠️ Generation Error: {str(e)}")
         st.markdown("Try reducing input length or increasing `max_new_tokens`.")
-
-# --- Cover Letter Generator ---
-if generate_cover_btn and resume_file and jd_file:
-    prompt_text = f"""
-    Write a {tone.lower()} cover letter for the following job description and resume.
-
-    Job Description:
-    {jd_text}
-
-    Resume:
-    {resume_text}
-
-    The cover letter should highlight relevant skills, express interest in the role, and be tailored to the job.
-    """
-
-    inputs = tokenizer(prompt_text, return_tensors="pt", truncation=True).to(device)
-    try:
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=300,
-            do_sample=True,
-            temperature=0.7,
-            pad_token_id=tokenizer.eos_token_id
-        )
-        cover_letter = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        st.markdown("### ✉️ Generated Cover Letter", unsafe_allow_html=True)
-        st.text_area("Preview", cover_letter, height=300)
-
-        with open("cover_letters.txt", "a", encoding="utf-8") as txt_file:
-            txt_file.write(f"\n[{get_timestamp()}]\nTone: {tone}\n{cover_letter}\n")
-
-        with open("cover_letters.csv", "a", newline='', encoding="utf-8") as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow([get_timestamp(), tone, cover_letter])
-
-        st.toast(f"✅ Cover letter saved at {get_timestamp()}", icon="📨")
-
-    except ValueError as e:
-        st.error(f"⚠️ Generation Error: {str(e)}")
-        st.markdown("Try reducing input length or increasing `max_new_tokens`.")
-
