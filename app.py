@@ -12,7 +12,17 @@ def get_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # Load spaCy model
-nlp = spacy.load("en_core_web_sm")
+ --- Load spaCy Model Safely ---
+def load_spacy_model():
+    try:
+        return spacy.load("en_core_web_sm")
+    except OSError:
+        import subprocess
+        subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+        return spacy.load("en_core_web_sm")
+
+nlp = load_spacy_model()
+
 
 # Load GPT-2 model and tokenizer
 model_name = "gpt2"
