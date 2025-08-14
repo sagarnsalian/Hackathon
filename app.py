@@ -11,7 +11,7 @@ from docx import Document
 def get_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
---- Load spaCy Model Safely ---
+# --- Load spaCy Model Safely ---
 
 def load_spacy_model():
     try:
